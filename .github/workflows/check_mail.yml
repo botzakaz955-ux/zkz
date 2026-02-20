@@ -3,7 +3,6 @@ name: Check Mail Orders
 on:
   schedule:
     - cron: '*/5 * * * *'
-  workflow_dispatch:
 
 jobs:
   check-mail:
