@@ -2,8 +2,8 @@ name: Check Mail Orders
 
 on:
   schedule:
-    - cron: '*/2 * * * *'  # Запуск каждые 5 минут
-  workflow_dispatch:      # Возможность ручного запуска
+    - cron: '*/2 * * * *'
+  workflow_dispatch:
 
 jobs:
   check-mail:
