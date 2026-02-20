@@ -1,4 +1,5 @@
 import os
+import time
 from email_service import connect_to_yandex, get_unseen_orders
 from pdf_parser import extract_text_from_pdf, parse_orders
 from telegram_service import send_to_telegram, format_order_message
@@ -36,13 +37,18 @@ def main():
                 
                 print(f"📄 В PDF найдено заказов: {len(orders)}")
                 
-                for order in orders:
+                for i, order in enumerate(orders):
                     msg = format_order_message(order)
                     success = send_to_telegram(msg)
                     if success:
                         print(f"✅ Заказ #{order['order_number']} отправлен в Telegram")
                     else:
                         print(f"❌ Не удалось отправить заказ #{order['order_number']}")
+                    
+                    # ⏱ ЗАДЕРЖКА между сообщениями (15 секунд)
+                    if i < len(orders) - 1:  # Не ждём после последнего сообщения
+                        print(f"⏳ Пауза 15 секунд перед следующим сообщением...")
+                        time.sleep(10)
                     
     except Exception as e:
         print(f"❌ Критическая ошибка: {e}")
