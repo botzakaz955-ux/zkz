@@ -1,20 +1,23 @@
 import os
-from dotenv import load_dotenv
 from email_service import connect_to_yandex, get_unseen_orders
 from pdf_parser import extract_text_from_pdf, parse_orders
 from telegram_service import send_to_telegram, format_order_message
 
-load_dotenv()
-
 def main():
+    # Получаем переменные напрямую из окружения (без .env файла)
     EMAIL_USER = os.getenv("EMAIL_USER")
     EMAIL_PASS = os.getenv("EMAIL_PASS")
+    
+    print(f"🔍 Проверка переменных...")
+    print(f"EMAIL_USER: {'✅ Настроен' if EMAIL_USER else '❌ Пусто'}")
+    print(f"EMAIL_PASS: {'✅ Настроен' if EMAIL_PASS else '❌ Пусто'}")
     
     if not EMAIL_USER or not EMAIL_PASS:
         print("❌ Ошибка: Не настроены переменные окружения почты")
         return
 
     try:
+        print(f"📬 Подключение к почте: {EMAIL_USER}")
         mail = connect_to_yandex(EMAIL_USER, EMAIL_PASS)
         emails = get_unseen_orders(mail)
         mail.close()
@@ -35,10 +38,16 @@ def main():
                 
                 for order in orders:
                     msg = format_order_message(order)
-                    send_to_telegram(msg)
+                    success = send_to_telegram(msg)
+                    if success:
+                        print(f"✅ Заказ #{order['order_number']} отправлен в Telegram")
+                    else:
+                        print(f"❌ Не удалось отправить заказ #{order['order_number']}")
                     
     except Exception as e:
         print(f"❌ Критическая ошибка: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
