@@ -76,6 +76,11 @@ def parse_delivery_table_from_email(email_body):
     """
     Парсит таблицу из тела письма и возвращает словарь:
     {номер_заказа: {'delivery_date': ..., 'delivery_time': ...}}
+    
+    Формат таблицы из письма:
+    Магазин	Номер заказа	Сумма заказа	Способ оплаты	Способ доставки	Дата доставки	Время доставки
+    ФР Кемерово, Ленина пр, 64					
+    Заказ покупателя 00ЦБ-002857 от 26.02.2026 14:09:03	8090287	2 163,00	Оплата на сайте	Доставка курьером	26.02.2026	15 - 16
     """
     delivery_data = {}
     
@@ -101,11 +106,18 @@ def parse_delivery_table_from_email(email_body):
                 if data_line == 'Заказ':
                     continue
                 
+                # Пропускаем строки с названиями магазинов (в них нет 7-значного номера заказа)
+                if not re.search(r'\d{7,}', data_line):
+                    continue
+                
                 # Разбиваем по табуляции
                 columns = [col.strip() for col in data_line.split('\t')]
                 columns = [col for col in columns if col]  # Убираем пустые
                 
-                print(f"📋 Строка таблицы: {columns}")
+                # Если мало колонок, пробуем по двойным пробелам
+                if len(columns) < 6:
+                    columns = [col.strip() for col in re.split(r'\s{2,}', data_line)]
+                    columns = [col for col in columns if col]
                 
                 # Ожидаем минимум 7 колонок:
                 # 0: Описание заказа
@@ -126,24 +138,34 @@ def parse_delivery_table_from_email(email_body):
                                 break
                         
                         if not order_number:
-                            print(f"⚠️ Не найден номер заказа в строке")
                             continue
                         
-                        # Дата доставки - 6-я колонка (индекс 5)
-                        # Время доставки - 7-я колонка (индекс 6)
-                        delivery_date = columns[5].strip() if len(columns) > 5 else "Не указано"
-                        delivery_time = columns[6].strip() if len(columns) > 6 else "Не указано"
+                        # Ищем дату в формате ДД.ММ.ГГГГ
+                        delivery_date = "Не указано"
+                        delivery_time = "Не указано"
+                        
+                        for idx, col in enumerate(columns):
+                            if re.match(r'\d{1,2}\.\d{1,2}\.\d{4}', col):
+                                delivery_date = col
+                                # Время - следующая колонка
+                                if idx + 1 < len(columns):
+                                    time_match = re.search(r'(\d{1,2}\s*[-–]\s*\d{1,2})', columns[idx + 1])
+                                    if time_match:
+                                        delivery_time = time_match.group(1).replace('–', '-')
+                                break
                         
                         if order_number and delivery_date != "Не указано":
                             delivery_data[order_number] = {
                                 'delivery_date': delivery_date,
                                 'delivery_time': delivery_time
                             }
-                            print(f"✅ Добавлено: {order_number} -> {delivery_date} {delivery_time}")
+                            print(f"✅ Найдена доставка: {order_number} -> {delivery_date} {delivery_time}")
                             
                     except Exception as e:
                         print(f"❌ Ошибка парсинга строки: {e}")
                         continue
     
     return delivery_data
-    
+
+# Алиас для обратной совместимости с main.py
+parse_delivery_info_from_email = parse_delivery_table_from_email
