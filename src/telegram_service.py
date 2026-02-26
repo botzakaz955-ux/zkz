@@ -27,6 +27,8 @@ def format_order_message(order):
         f"👤 <b>Покупатель:</b> {order['customer']}\n"
         f"📞 <b>Телефон:</b> <a href='tel:{order['phone']}'>{order['phone']}</a>\n"
         f"🚚 <b>Доставка:</b> {order['delivery_method']}\n"
+        f"📅 <b>Дата доставки:</b> {order['delivery_date']}\n"
+        f"⏰ <b>Время доставки:</b> {order['delivery_time']}\n"
         f"📍 <b>Адрес:</b> {order['delivery_address']}\n"
         f"💳 <b>Оплата:</b> {order['payment_method']}\n"
         f"🏪 <b>Магазин:</b> {order['shop_address']}\n"
