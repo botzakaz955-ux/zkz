@@ -1,7 +1,6 @@
 import imaplib
 import email
 from email.header import decode_header
-import base64
 
 def connect_to_yandex(user, password):
     """Подключается к Яндекс.Почте по IMAP."""
@@ -21,7 +20,7 @@ def get_unseen_orders(mail, sender_filter="ishop@volcov.ru"):
 
     for e_id in email_ids:
         status, msg_data = mail.fetch(e_id, '(RFC822)')
-        for response_part in msg_
+        for response_part in msg_data:  # ← ВОТ ИСПРАВЛЕНИЕ: msg_data + двоеточие
             if isinstance(response_part, tuple):
                 msg = email.message_from_bytes(response_part[1])
                 
