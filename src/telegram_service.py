@@ -5,14 +5,19 @@ def get_chat_id_by_city(city):
     """Возвращает ID чата в зависимости от города."""
     city = city.lower()
     
-    if "кемерово" in city:
-        return os.getenv("GROUP_KEMEROVO")
-    elif "красноярск" in city:
-        return os.getenv("GROUP_KRASNOYARSK")
-    elif "шерегеш" in city or "геш" in city:
-        return os.getenv("GROUP_SHEREGESH")
+    # Проверяем наличие чатов для городов
+    kem_chat = os.getenv("GROUP_KEMEROVO")
+    kras_chat = os.getenv("GROUP_KRASNOYARSK")
+    shere_chat = os.getenv("GROUP_SHEREGESH")
+    
+    if "кемерово" in city and kem_chat:
+        return kem_chat
+    elif "красноярск" in city and kras_chat:
+        return kras_chat
+    elif "шерегеш" in city and shere_chat:
+        return shere_chat
     else:
-        return os.getenv("GROUP_CHAT_ID")
+        return None  # Возвращаем None, если чат для города не найден
 
 def send_to_telegram(message_text, chat_id):
     """Отправляет сообщение в указанный чат."""
