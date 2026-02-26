@@ -51,6 +51,8 @@ def parse_single_order(text_block):
         "order_number": "Не указано",
         "delivery_method": "Не указано",
         "delivery_address": "Не указано",
+        "delivery_date": "Не указано",      # ✅ НОВОЕ ПОЛЕ
+        "delivery_time": "Не указано",      # ✅ НОВОЕ ПОЛЕ
         "payment_method": "Не указано",
         "shop_address": "Не указано",
         "comment": "Нет"
@@ -70,6 +72,8 @@ def parse_single_order(text_block):
     data["phone"] = find_value("Телефон")
     data["delivery_method"] = find_value("Способ доставки")
     data["delivery_address"] = find_value("Адрес доставки")
+    data["delivery_date"] = find_value("Дата доставки")      # ✅ НОВОЕ
+    data["delivery_time"] = find_value("Время доставки")      # ✅ НОВОЕ
     data["payment_method"] = find_value("Способ оплаты")
     data["shop_address"] = find_value("Адрес магазина")
     
