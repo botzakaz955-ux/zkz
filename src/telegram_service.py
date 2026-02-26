@@ -60,3 +60,27 @@ def format_order_message(order):
         f"\n━━━━━━━━━━━━━━━━━━━━"
     )
     return text
+
+def send_order(order):
+    """
+    Отправляет заказ в Telegram:
+    1. Всегда в основной чат (GROUP_MAIN)
+    2. Дополнительно в чат города, если он настроен и отличается от основного
+    """
+    message_text = format_order_message(order)
+    
+    # Получаем ID основного чата
+    main_chat_id = os.getenv("GROUP_MAIN")
+    
+    # Всегда отправляем в основной чат
+    if main_chat_id:
+        send_to_telegram(message_text, main_chat_id)
+    else:
+        print("⚠️ GROUP_MAIN не настроен, основной чат пропущен")
+    
+    # Получаем чат города и отправляем туда тоже, если он есть
+    city_chat_id = get_chat_id_by_city(order.get('city', ''))
+    
+    # Отправляем в чат города, если он есть и не совпадает с основным
+    if city_chat_id and city_chat_id != main_chat_id:
+        send_to_telegram(message_text, city_chat_id)
