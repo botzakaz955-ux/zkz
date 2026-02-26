@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import re
 from email_service import connect_to_yandex, get_unseen_orders
 from pdf_parser import extract_text_from_pdf, parse_orders, parse_delivery_info_from_email
 from telegram_service import send_to_telegram, format_order_message, get_chat_id_by_city
@@ -53,6 +54,60 @@ def extract_city_from_address(address):
     
     return 'other'
 
+def parse_delivery_table_from_email(email_body):
+    """
+    Парсит таблицу из тела письма и возвращает словарь:
+    {номер_заказа: {'delivery_date': ..., 'delivery_time': ...}}
+    """
+    delivery_data = {}
+    
+    # Разбиваем тело письма на строки
+    lines = email_body.strip().split('\n')
+    
+    # Ищем заголовок таблицы
+    header_found = False
+    for i, line in enumerate(lines):
+        if 'Магазин' in line and 'Дата доставки' in line:
+            header_found = True
+            # Следующие строки - данные таблицы
+            for j in range(i+1, min(i+20, len(lines))):
+                data_line = lines[j].strip()
+                
+                # Пропускаем пустые строки
+                if not data_line:
+                    continue
+                
+                # Пропускаем строки заголовков типа "Заказ"
+                if data_line == 'Заказ' or 'Заказ покупателя' in data_line:
+                    continue
+                
+                # Разбиваем по табуляции
+                columns = [col.strip() for col in data_line.split('\t')]
+                columns = [col for col in columns if col]  # Убираем пустые
+                
+                # Если мало колонок, пробуем по двойным пробелам
+                if len(columns) < 6:
+                    columns = [col.strip() for col in re.split(r'\s{2,}', data_line)]
+                    columns = [col for col in columns if col]
+                
+                # Ожидаем: Магазин, Номер заказа, Сумма, Оплата, Доставка, Дата, Время
+                if len(columns) >= 7:
+                    try:
+                        order_number = columns[1].strip()  # Номер заказа (2-я колонка)
+                        delivery_date = columns[5].strip() if len(columns) > 5 else "Не указано"
+                        delivery_time = columns[6].strip() if len(columns) > 6 else "Не указано"
+                        
+                        # Проверяем формат даты
+                        if re.match(r'\d{1,2}\.\d{1,2}\.\d{4}', delivery_date):
+                            delivery_data[order_number] = {
+                                'delivery_date': delivery_date,
+                                'delivery_time': delivery_time
+                            }
+                    except (IndexError, ValueError) as e:
+                        continue
+    
+    return delivery_data
+
 def main():
     # Получаем переменные из окружения
     EMAIL_USER = os.getenv("EMAIL_USER")
@@ -90,9 +145,10 @@ def main():
         duplicate_orders = 0
 
         for email_item in emails:
-            # 📅 Парсим дату и время доставки из тела письма
-            delivery_info = parse_delivery_info_from_email(email_item.get("body", ""))
-            print(f"📅 Дата: {delivery_info['delivery_date']}, Время: {delivery_info['delivery_time']}")
+            # 📅 Парсим таблицу из тела письма
+            delivery_table = parse_delivery_table_from_email(email_item.get("body", ""))
+            print(f"📅 Найдено записей о доставке в таблице: {len(delivery_table)}")
+            print(f"📅 Данные: {delivery_table}")
             
             for pdf_bytes in email_item["attachments"]:
                 text = extract_text_from_pdf(pdf_bytes)
@@ -114,9 +170,15 @@ def main():
                         skipped_orders += 1
                         continue
                     
-                    # 📅 Добавляем дату и время доставки из письма
-                    order['delivery_date'] = delivery_info['delivery_date']
-                    order['delivery_time'] = delivery_info['delivery_time']
+                    # 📅 Добавляем дату и время из таблицы по номеру заказа
+                    if order['order_number'] in delivery_table:
+                        order['delivery_date'] = delivery_table[order['order_number']]['delivery_date']
+                        order['delivery_time'] = delivery_table[order['order_number']]['delivery_time']
+                        print(f"✅ Найдена доставка для заказа #{order['order_number']}: {order['delivery_date']} {order['delivery_time']}")
+                    else:
+                        order['delivery_date'] = "Не указано"
+                        order['delivery_time'] = "Не указано"
+                        print(f"⚠️ Не найдена доставка для заказа #{order['order_number']}")
                     
                     # 📍 Определение города и выбор группы
                     city = extract_city_from_address(order['delivery_address'])
