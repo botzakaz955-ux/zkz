@@ -2,8 +2,8 @@ name: Check Mail Orders
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:      # Возможность ручного запуска
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
   check-mail:
@@ -11,6 +11,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Download sent_orders.json
+        uses: actions/download-artifact@v3
+        with:
+          name: sent-orders
+          path: ./
+        continue-on-error: true
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -25,6 +32,16 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           GROUP_CHAT_ID: ${{ secrets.GROUP_CHAT_ID }}
+          GROUP_KEMEROVO: ${{ secrets.GROUP_KEMEROVO }}
+          GROUP_KRASNOYARSK: ${{ secrets.GROUP_KRASNOYARSK }}
+          GROUP_SHEREGESH: ${{ secrets.GROUP_SHEREGESH }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: python src/main.py
+
+      - name: Upload sent_orders.json
+        uses: actions/upload-artifact@v3
+        with:
+          name: sent-orders
+          path: sent_orders.json
+          retention-days: 30
