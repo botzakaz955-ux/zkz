@@ -1,5 +1,6 @@
 import fitz  # PyMuPDF
 import re
+from html import unescape
 
 def extract_text_from_pdf(pdf_bytes):
     """Извлекает весь текст из PDF байтов."""
@@ -11,9 +12,7 @@ def extract_text_from_pdf(pdf_bytes):
     return text
 
 def parse_orders(raw_text):
-    """
-    Разбивает текст на заказы и парсит поля.
-    """
+    """Разбивает текст на заказы и парсит поля."""
     orders = []
     
     # Паттерн для поиска начала заказа
@@ -72,82 +71,87 @@ def parse_single_order(text_block):
 
     return data
 
-def parse_delivery_table_from_email(email_body):
+def parse_delivery_table_from_email(html_body):
     """
     Парсит HTML таблицу из тела письма и возвращает словарь:
     {номер_заказа: {'delivery_date': ..., 'delivery_time': ...}}
     """
-    import re
-    from html import unescape
-    
     delivery_data = {}
     
+    if not html_body:
+        print("⚠️ HTML тело письма пустое")
+        return delivery_data
+    
     # Декодируем HTML сущности
-    email_body = unescape(email_body)
+    html_body = unescape(html_body)
     
-    # Ищем все строки таблицы с данными заказов
-    # Ищем паттерн: номер заказа (7+ цифр), затем дата и время
-    order_pattern = r'(\d{7,})\s*</td>.*?(\d{1,2}\.\d{1,2}\.\d{4})\s*</td>.*?(\d{1,2}\s*[-–]\s*\d{1,2})'
+    # Ищем все строки таблицы с классом R6 (строки с данными заказов)
+    # В HTML это выглядит как <tr class="R6">...</tr>
+    row_pattern = r'<tr[^>]*class="R6"[^>]*>(.*?)</tr>'
+    rows = re.findall(row_pattern, html_body, re.DOTALL | re.IGNORECASE)
     
-    matches = re.findall(order_pattern, email_body, re.DOTALL)
+    print(f"📋 Найдено строк таблицы R6: {len(rows)}")
     
-    for match in matches:
-        order_number = match[0].strip()
-        delivery_date = match[1].strip()
-        delivery_time = match[2].strip()
+    for row in rows:
+        # Извлекаем все ячейки из строки
+        cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
         
-        if order_number and delivery_date:
-            delivery_data[order_number] = {
-                'delivery_date': delivery_date,
-                'delivery_time': delivery_time
-            }
-            print(f"✅ Найдена доставка: {order_number} -> {delivery_date} {delivery_time}")
-    
-    # Если не нашли по паттерну, пробуем найти по классам таблицы
-    if not delivery_data:
-        # Ищем строки таблицы с классом R6 (строки с данными)
-        row_pattern = r'<tr[^>]*class="R6"[^>]*>(.*?)</tr>'
-        rows = re.findall(row_pattern, email_body, re.DOTALL)
+        # Очищаем ячейки от HTML тегов
+        cleaned_cells = []
+        for cell in cells:
+            # Удаляем HTML теги
+            cell_text = re.sub(r'<[^>]+>', '', cell)
+            cell_text = cell_text.strip()
+            if cell_text:
+                cleaned_cells.append(cell_text)
         
-        for row in rows:
-            # Извлекаем все ячейки из строки
-            cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
-            
-            if len(cells) >= 7:
-                try:
-                    # Ищем номер заказа (ячейка с 7+ цифрами)
-                    order_number = None
-                    delivery_date = None
-                    delivery_time = None
-                    
-                    for i, cell in enumerate(cells):
-                        # Очищаем ячейку от HTML тегов
-                        cell_text = re.sub(r'<[^>]+>', '', cell).strip()
-                        
-                        # Проверяем на номер заказа
-                        if re.match(r'^\d{7,}$', cell_text):
-                            order_number = cell_text
-                        
-                        # Проверяем на дату (ДД.ММ.ГГГГ)
-                        if re.match(r'^\d{1,2}\.\d{1,2}\.\d{4}$', cell_text):
-                            delivery_date = cell_text
-                        
-                        # Проверяем на время (ЧЧ - ЧЧ)
-                        if re.match(r'^\d{1,2}\s*[-–]\s*\d{1,2}$', cell_text):
-                            delivery_time = cell_text
-                    
-                    if order_number and delivery_date:
-                        delivery_data[order_number] = {
-                            'delivery_date': delivery_date,
-                            'delivery_time': delivery_time if delivery_time else "Не указано"
-                        }
-                        print(f"✅ Найдена доставка: {order_number} -> {delivery_date} {delivery_time if delivery_time else 'Не указано'}")
+        print(f"📋 Ячейки строки: {cleaned_cells}")
+        
+        # Ожидаем минимум 7 колонок:
+        # 0: Описание заказа
+        # 1: Номер заказа (8090287)
+        # 2: Сумма
+        # 3: Способ оплаты
+        # 4: Способ доставки
+        # 5: Дата доставки (26.02.2026)
+        # 6: Время доставки (15 - 16)
+        
+        if len(cleaned_cells) >= 7:
+            try:
+                # Ищем номер заказа (должен быть только цифры, 7+ знаков)
+                order_number = None
+                for cell in cleaned_cells:
+                    if re.match(r'^\d{7,}$', cell.replace(' ', '').replace(',', '')):
+                        order_number = cell.replace(' ', '').replace(',', '')
+                        break
                 
-                except Exception as e:
-                    print(f"❌ Ошибка парсинга строки: {e}")
+                if not order_number:
+                    print(f"⚠️ Не найден номер заказа в строке")
                     continue
+                
+                # Ищем дату в формате ДД.ММ.ГГГГ
+                delivery_date = "Не указано"
+                delivery_time = "Не указано"
+                
+                for idx, cell in enumerate(cleaned_cells):
+                    if re.match(r'^\d{1,2}\.\d{1,2}\.\d{4}$', cell):
+                        delivery_date = cell
+                        # Время - следующая ячейка
+                        if idx + 1 < len(cleaned_cells):
+                            time_match = re.search(r'(\d{1,2}\s*[-–]\s*\d{1,2})', cleaned_cells[idx + 1])
+                            if time_match:
+                                delivery_time = time_match.group(1).replace('–', '-')
+                        break
+                
+                if order_number and delivery_date != "Не указано":
+                    delivery_data[order_number] = {
+                        'delivery_date': delivery_date,
+                        'delivery_time': delivery_time
+                    }
+                    print(f"✅ Найдена доставка: {order_number} -> {delivery_date} {delivery_time}")
+                    
+            except Exception as e:
+                print(f"❌ Ошибка парсинга строки: {e}")
+                continue
     
     return delivery_data
-
-# Алиас для обратной совместимости с main.py
-parse_delivery_info_from_email = parse_delivery_table_from_email
