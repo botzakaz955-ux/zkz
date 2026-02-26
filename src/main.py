@@ -220,22 +220,32 @@ def main():
                         order['delivery_time'] = "Не указано"
                         print(f"⚠️ Не найдена доставка для заказа #{order['order_number']}")
                     
-                    # 📍 Определение города и выбор группы
-                    city = extract_city_from_address(order['delivery_address'])
-                    chat_id = get_chat_id_by_city(city)
-                    
-                    print(f"📍 Город: {city} → Чат: {chat_id}")
-                    
-                    # Форматируем и отправляем
+                    # Форматируем сообщение
                     msg = format_order_message(order)
-                    success = send_to_telegram(msg, chat_id)
                     
-                    if success:
-                        print(f"✅ Заказ #{order['order_number']} отправлен в Telegram")
-                        sent_orders.append(order['order_number'])
-                        sent_orders_count += 1
+                    # 🎯 ОТПРАВКА В ОСНОВНОЙ ЧАТ (ВСЕГДА!)
+                    main_chat_id = os.getenv("GROUP_CHAT_ID")
+                    if main_chat_id:
+                        success = send_to_telegram(msg, main_chat_id)
+                        if success:
+                            print(f"✅ Заказ #{order['order_number']} отправлен в ОСНОВНОЙ чат")
+                            sent_orders_count += 1
+                        else:
+                            print(f"❌ Не удалось отправить заказ #{order['order_number']} в основной чат")
                     else:
-                        print(f"❌ Не удалось отправить заказ #{order['order_number']}")
+                        print(f"⚠️ Основной чат не настроен!")
+                    
+                    # 📍 ДОПОЛНИТЕЛЬНО: Отправка в чат по городу (если настроен)
+                    city = extract_city_from_address(order['delivery_address'])
+                    city_chat_id = get_chat_id_by_city(city)
+                    
+                    if city_chat_id and city_chat_id != main_chat_id:
+                        print(f"📍 Дублируем заказ #{order['order_number']} в чат города: {city}")
+                        success = send_to_telegram(msg, city_chat_id)
+                        if success:
+                            print(f"✅ Заказ #{order['order_number']} продублирован в чат города {city}")
+                        else:
+                            print(f"⚠️ Не удалось продублировать заказ #{order['order_number']} в чат города {city} (это не критично)")
                     
                     # ⏱ ЗАДЕРЖКА между сообщениями (15 секунд)
                     if i < len(orders) - 1:
