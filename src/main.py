@@ -69,41 +69,81 @@ def parse_delivery_table_from_email(email_body):
     for i, line in enumerate(lines):
         if 'Магазин' in line and 'Дата доставки' in line:
             header_found = True
-            # Следующие строки - данные таблицы
-            for j in range(i+1, min(i+20, len(lines))):
+            print(f"📅 Заголовок таблицы найден на строке {i}")
+            
+            # Проходим по всем строкам после заголовка
+            for j in range(i+1, len(lines)):
                 data_line = lines[j].strip()
                 
                 # Пропускаем пустые строки
                 if not data_line:
                     continue
                 
-                # Пропускаем строки заголовков типа "Заказ"
-                if data_line == 'Заказ' or 'Заказ покупателя' in data_line:
+                # Пропускаем строки, которые содержат только название магазина
+                # (в них нет номера заказа - только цифры в формате 8090287)
+                if not re.search(r'\d{7,}', data_line):
+                    print(f"⏭️ Пропущена строка (нет номера заказа): {data_line[:50]}")
                     continue
                 
                 # Разбиваем по табуляции
                 columns = [col.strip() for col in data_line.split('\t')]
                 columns = [col for col in columns if col]  # Убираем пустые
                 
+                print(f"📋 Строка таблицы: {columns}")
+                
                 # Если мало колонок, пробуем по двойным пробелам
                 if len(columns) < 6:
+                    # Пробуем разбить по множественным пробелам (2 и более)
                     columns = [col.strip() for col in re.split(r'\s{2,}', data_line)]
                     columns = [col for col in columns if col]
+                    print(f" После split по пробелам: {columns}")
                 
-                # Ожидаем: Магазин, Номер заказа, Сумма, Оплата, Доставка, Дата, Время
+                # Ожидаем минимум 7 колонок:
+                # 0: Заказ покупателя... / Название магазина
+                # 1: Номер заказа (8090287)
+                # 2: Сумма (2 163,00)
+                # 3: Способ оплаты
+                # 4: Способ доставки
+                # 5: Дата доставки (26.02.2026)
+                # 6: Время доставки (15 - 16)
+                
                 if len(columns) >= 7:
                     try:
-                        order_number = columns[1].strip()  # Номер заказа (2-я колонка)
-                        delivery_date = columns[5].strip() if len(columns) > 5 else "Не указано"
-                        delivery_time = columns[6].strip() if len(columns) > 6 else "Не указано"
+                        # Ищем номер заказа (должен быть только цифры, 7+ знаков)
+                        order_number = None
+                        for col in columns:
+                            if re.match(r'^\d{7,}$', col.replace(' ', '')):
+                                order_number = col.replace(' ', '')
+                                break
                         
-                        # Проверяем формат даты
-                        if re.match(r'\d{1,2}\.\d{1,2}\.\d{4}', delivery_date):
+                        if not order_number:
+                            print(f"⚠️ Не найден номер заказа в строке: {data_line[:50]}")
+                            continue
+                        
+                        # Дата доставки - предпоследняя колонка с датой
+                        delivery_date = "Не указано"
+                        delivery_time = "Не указано"
+                        
+                        # Ищем дату в формате ДД.ММ.ГГГГ
+                        for idx, col in enumerate(columns):
+                            if re.match(r'\d{1,2}\.\d{1,2}\.\d{4}', col):
+                                delivery_date = col
+                                # Время - следующая колонка
+                                if idx + 1 < len(columns):
+                                    time_match = re.search(r'(\d{1,2}\s*[-–]\s*\d{1,2})', columns[idx + 1])
+                                    if time_match:
+                                        delivery_time = time_match.group(1).replace('–', '-')
+                                break
+                        
+                        if order_number and delivery_date != "Не указано":
                             delivery_data[order_number] = {
                                 'delivery_date': delivery_date,
                                 'delivery_time': delivery_time
                             }
-                    except (IndexError, ValueError) as e:
+                            print(f"✅ Добавлено: {order_number} -> {delivery_date} {delivery_time}")
+                            
+                    except Exception as e:
+                        print(f"❌ Ошибка парсинга строки: {e}")
                         continue
     
     return delivery_data
