@@ -1,15 +1,34 @@
 import requests
 import os
 
-def send_to_telegram(message_text):
+def get_chat_id_by_city(city):
+    """Возвращает ID чата в зависимости от города."""
+    city = city.lower()
+    
+    if "кемерово" in city:
+        return os.getenv("GROUP_KEMEROVO")
+    elif "красноярск" in city:
+        return os.getenv("GROUP_KRASNOYARSK")
+    elif "шерегеш" in city or "геш" in city:
+        return os.getenv("GROUP_SHEREGESH")
+    else:
+        return os.getenv("GROUP_CHAT_ID")
+
+def send_to_telegram(message_text, chat_id):
+    """Отправляет сообщение в указанный чат."""
     token = os.getenv("BOT_TOKEN")
-    chat_id = os.getenv("GROUP_CHAT_ID")
+    
+    if not chat_id:
+        print(f"⚠️ Chat ID не указан, сообщение не отправлено")
+        return False
+    
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     
     payload = {
         "chat_id": chat_id,
         "text": message_text,
-        "parse_mode": "HTML"
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
     }
     
     try:
@@ -26,9 +45,9 @@ def format_order_message(order):
         f"🛒 <b>НОВЫЙ ЗАКАЗ #{order['order_number']}</b>\n\n"
         f"👤 <b>Покупатель:</b> {order['customer']}\n"
         f"📞 <b>Телефон:</b> <a href='tel:{order['phone']}'>{order['phone']}</a>\n"
-        f"🚚 <b>Доставка:</b> {order['delivery_method']}\n"
         f"📅 <b>Дата доставки:</b> {order['delivery_date']}\n"
-        f"⏰ <b>Время доставки:</b> {order['delivery_time']}\n"
+        f"🕐 <b>Время доставки:</b> {order['delivery_time']}\n"
+        f"🚚 <b>Доставка:</b> {order['delivery_method']}\n"
         f"📍 <b>Адрес:</b> {order['delivery_address']}\n"
         f"💳 <b>Оплата:</b> {order['payment_method']}\n"
         f"🏪 <b>Магазин:</b> {order['shop_address']}\n"
