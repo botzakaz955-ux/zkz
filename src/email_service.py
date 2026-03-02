@@ -11,25 +11,23 @@ def connect_to_yandex(user, password):
 
 def get_unseen_orders(mail, sender_filter="ishop@volcov.ru"):
     """Находит непрочитанные письма от конкретного отправителя."""
-    # Поиск всех непрочитанных писем
     status, messages = mail.search(None, 'UNSEEN')
     
     email_ids = messages[0].split()
     processed_ids = []
-    emails_data = []
+    emails_data =[]
 
     for e_id in email_ids:
         status, msg_data = mail.fetch(e_id, '(RFC822)')
-        for response_part in msg_data:  # ← ВОТ ИСПРАВЛЕНИЕ: msg_data + двоеточие
+        for response_part in msg_data:
             if isinstance(response_part, tuple):
                 msg = email.message_from_bytes(response_part[1])
                 
                 # Проверяем отправителя вручную
                 sender = msg.get('From', '')
                 if sender_filter not in sender:
-                    continue  # Пропускаем, если не тот отправитель
+                    continue
                 
-                # Извлекаем HTML часть письма (там таблица с доставкой)
                 html_body = ""
                 email_body = ""
                 
@@ -38,7 +36,6 @@ def get_unseen_orders(mail, sender_filter="ishop@volcov.ru"):
                         content_type = part.get_content_type()
                         content_disposition = str(part.get("Content-Disposition"))
                         
-                        # Текстовая часть
                         if content_type == "text/plain" and "attachment" not in content_disposition:
                             try:
                                 body = part.get_payload(decode=True)
@@ -47,7 +44,6 @@ def get_unseen_orders(mail, sender_filter="ishop@volcov.ru"):
                             except Exception:
                                 continue
                         
-                        # HTML часть (ВАЖНО! Там таблица с доставкой)
                         if content_type == "text/html" and "attachment" not in content_disposition:
                             try:
                                 html = part.get_payload(decode=True)
@@ -56,8 +52,7 @@ def get_unseen_orders(mail, sender_filter="ishop@volcov.ru"):
                             except Exception:
                                 continue
                 
-                # Проверяем вложения PDF
-                attachments = []
+                attachments =[]
                 if msg.is_multipart():
                     for part in msg.walk():
                         content_type = part.get_content_type()
@@ -75,7 +70,7 @@ def get_unseen_orders(mail, sender_filter="ishop@volcov.ru"):
                         "id": e_id,
                         "attachments": attachments,
                         "body": email_body,
-                        "html_body": html_body  # Добавили HTML часть
+                        "html_body": html_body
                     })
                     processed_ids.append(e_id)
 
