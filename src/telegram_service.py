@@ -5,7 +5,6 @@ def get_chat_id_by_city(city):
     """Возвращает ID чата в зависимости от города."""
     city = city.lower()
     
-    # Проверяем наличие чатов для городов
     kem_chat = os.getenv("GROUP_KEMEROVO")
     kras_chat = os.getenv("GROUP_KRASNOYARSK")
     shere_chat = os.getenv("GROUP_SHEREGESH")
@@ -17,14 +16,13 @@ def get_chat_id_by_city(city):
     elif "шерегеш" in city and shere_chat:
         return shere_chat
     else:
-        return None  # Возвращаем None, если чат для города не найден
+        return None
 
 def send_to_telegram(message_text, chat_id):
     """Отправляет сообщение в указанный чат."""
     token = os.getenv("BOT_TOKEN")
     
     if not chat_id:
-        print(f"⚠️ Chat ID не указан, сообщение не отправлено")
         return False
     
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -68,19 +66,26 @@ def send_order(order):
     2. Дополнительно в чат города, если он настроен и отличается от основного
     """
     message_text = format_order_message(order)
-    
-    # Получаем ID основного чата
     main_chat_id = os.getenv("GROUP_MAIN")
     
-    # Всегда отправляем в основной чат
+    success_main = False
+    success_city = False
+
+    # 1. Отправка в ГЛАВНЫЙ чат (обязательно для всех городов)
     if main_chat_id:
-        send_to_telegram(message_text, main_chat_id)
+        success_main = send_to_telegram(message_text, main_chat_id)
+        if success_main:
+            print("➡️ Успешно отправлено в ГЛАВНЫЙ чат.")
     else:
         print("⚠️ GROUP_MAIN не настроен, основной чат пропущен")
     
-    # Получаем чат города и отправляем туда тоже, если он есть
+    # 2. Дублирование в чат ГОРОДА
     city_chat_id = get_chat_id_by_city(order.get('city', ''))
     
-    # Отправляем в чат города, если он есть и не совпадает с основным
     if city_chat_id and city_chat_id != main_chat_id:
-        send_to_telegram(message_text, city_chat_id)
+        success_city = send_to_telegram(message_text, city_chat_id)
+        if success_city:
+            print(f"➡️ Успешно продублировано в чат города ({order.get('city')}).")
+            
+    # Заказ считается успешно отправленным, если он ушел хотя бы в один чат
+    return success_main or success_city
