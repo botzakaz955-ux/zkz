@@ -31,7 +31,7 @@ jobs:
       - name: Run Bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          GROUP_CHAT_ID: ${{ secrets.GROUP_CHAT_ID }}
+          GROUP_MAIN: ${{ secrets.GROUP_MAIN }}
           GROUP_KEMEROVO: ${{ secrets.GROUP_KEMEROVO }}
           GROUP_KRASNOYARSK: ${{ secrets.GROUP_KRASNOYARSK }}
           GROUP_SHEREGESH: ${{ secrets.GROUP_SHEREGESH }}
