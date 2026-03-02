@@ -14,10 +14,17 @@ def extract_text_from_pdf(pdf_bytes):
 def parse_orders(raw_text):
     """Разбивает текст на заказы и парсит поля."""
     orders =[]
-    order_split_pattern = r"Номер интернет-заказа:\s*\d+"
+    
+    # ИСПРАВЛЕНИЕ: Начинаем захват с самой верхней строчки документа, 
+    # чтобы не потерять Покупателя и Телефон, которые идут ДО Номера интернет-заказа.
+    order_split_pattern = r"Заказ покупателя №"
     matches = list(re.finditer(order_split_pattern, raw_text))
     
     if not matches:
+        # Если фразы "Заказ покупателя №" нет, парсим весь файл как один большой заказ
+        order_data = parse_single_order(raw_text)
+        if order_data.get("order_number") and order_data.get("order_number") != "Не указано":
+            orders.append(order_data)
         return orders
 
     for i, match in enumerate(matches):
@@ -27,7 +34,7 @@ def parse_orders(raw_text):
         order_block = raw_text[start_index:end_index]
         order_data = parse_single_order(order_block)
         
-        if order_data.get("order_number"):
+        if order_data.get("order_number") and order_data.get("order_number") != "Не указано":
             orders.append(order_data)
             
     return orders
@@ -48,15 +55,12 @@ def parse_single_order(text_block):
     }
     
     def find_value(key, fallback="Не указано"):
-        # ИСПРАВЛЕНИЕ: Этот паттерн учитывает переносы строк и пробелы после ключа. 
-        # Он корректно извлекает данные, даже если 'Покупатель' и имя находятся на разных строках.
-        pattern = rf"{key}[:\s]*\n*\s*([^\n]+)"
+        # Ищем классический вариант "Ключ: Значение"
+        pattern = rf"{key}:\s*([^\n]+)"
         match = re.search(pattern, text_block)
         if match:
             val = match.group(1).strip()
-            # Защита: если поле оказалось пустым, не захватываем следующий заголовок
-            known_headers =["Телефон", "Способ доставки", "Адрес доставки", "Способ оплаты", "Адрес магазина", "Комментарий", "Покупатель"]
-            if val not in known_headers:
+            if val:
                 return val
         return fallback
 
@@ -76,7 +80,6 @@ def parse_single_order(text_block):
 def parse_delivery_table_from_email(html_body):
     """Парсит HTML таблицу из тела письма."""
     delivery_data = {}
-    
     if not html_body:
         return delivery_data
     
@@ -123,5 +126,4 @@ def parse_delivery_table_from_email(html_body):
                     
             except Exception:
                 continue
-    
     return delivery_data
