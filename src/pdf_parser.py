@@ -13,12 +13,8 @@ def extract_text_from_pdf(pdf_bytes):
 
 def parse_orders(raw_text):
     """Разбивает текст на заказы и парсит поля."""
-    orders = []
-    
-    # Паттерн для поиска начала заказа
+    orders =[]
     order_split_pattern = r"Номер интернет-заказа:\s*\d+"
-    
-    # Находим все позиции начал заказов
     matches = list(re.finditer(order_split_pattern, raw_text))
     
     if not matches:
@@ -52,10 +48,16 @@ def parse_single_order(text_block):
     }
     
     def find_value(key, fallback="Не указано"):
-        pattern = rf"{key}:\s*(.+?)(?:\n|$)"
+        # ИСПРАВЛЕНИЕ: Этот паттерн учитывает переносы строк и пробелы после ключа. 
+        # Он корректно извлекает данные, даже если 'Покупатель' и имя находятся на разных строках.
+        pattern = rf"{key}[:\s]*\n*\s*([^\n]+)"
         match = re.search(pattern, text_block)
         if match:
-            return match.group(1).strip()
+            val = match.group(1).strip()
+            # Защита: если поле оказалось пустым, не захватываем следующий заголовок
+            known_headers =["Телефон", "Способ доставки", "Адрес доставки", "Способ оплаты", "Адрес магазина", "Комментарий", "Покупатель"]
+            if val not in known_headers:
+                return val
         return fallback
 
     data["order_number"] = find_value("Номер интернет-заказа")
@@ -72,53 +74,26 @@ def parse_single_order(text_block):
     return data
 
 def parse_delivery_table_from_email(html_body):
-    """
-    Парсит HTML таблицу из тела письма и возвращает словарь:
-    {номер_заказа: {'delivery_date': ..., 'delivery_time': ...}}
-    """
+    """Парсит HTML таблицу из тела письма."""
     delivery_data = {}
     
     if not html_body:
-        print("⚠️ HTML тело письма пустое")
         return delivery_data
     
-    # Декодируем HTML сущности
     html_body = unescape(html_body)
-    
-    # Ищем все строки таблицы с классом R6 (строки с данными заказов)
-    # В HTML это выглядит как <tr class="R6">...</tr>
     row_pattern = r'<tr[^>]*class="R6"[^>]*>(.*?)</tr>'
     rows = re.findall(row_pattern, html_body, re.DOTALL | re.IGNORECASE)
     
-    print(f"📋 Найдено строк таблицы R6: {len(rows)}")
-    
     for row in rows:
-        # Извлекаем все ячейки из строки
         cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
-        
-        # Очищаем ячейки от HTML тегов
         cleaned_cells = []
         for cell in cells:
-            # Удаляем HTML теги
-            cell_text = re.sub(r'<[^>]+>', '', cell)
-            cell_text = cell_text.strip()
+            cell_text = re.sub(r'<[^>]+>', '', cell).strip()
             if cell_text:
                 cleaned_cells.append(cell_text)
         
-        print(f"📋 Ячейки строки: {cleaned_cells}")
-        
-        # Ожидаем минимум 7 колонок:
-        # 0: Описание заказа
-        # 1: Номер заказа (8090287)
-        # 2: Сумма
-        # 3: Способ оплаты
-        # 4: Способ доставки
-        # 5: Дата доставки (26.02.2026)
-        # 6: Время доставки (15 - 16)
-        
         if len(cleaned_cells) >= 7:
             try:
-                # Ищем номер заказа (должен быть только цифры, 7+ знаков)
                 order_number = None
                 for cell in cleaned_cells:
                     if re.match(r'^\d{7,}$', cell.replace(' ', '').replace(',', '')):
@@ -126,17 +101,14 @@ def parse_delivery_table_from_email(html_body):
                         break
                 
                 if not order_number:
-                    print(f"⚠️ Не найден номер заказа в строке")
                     continue
                 
-                # Ищем дату в формате ДД.ММ.ГГГГ
                 delivery_date = "Не указано"
                 delivery_time = "Не указано"
                 
                 for idx, cell in enumerate(cleaned_cells):
                     if re.match(r'^\d{1,2}\.\d{1,2}\.\d{4}$', cell):
                         delivery_date = cell
-                        # Время - следующая ячейка
                         if idx + 1 < len(cleaned_cells):
                             time_match = re.search(r'(\d{1,2}\s*[-–]\s*\d{1,2})', cleaned_cells[idx + 1])
                             if time_match:
@@ -148,10 +120,8 @@ def parse_delivery_table_from_email(html_body):
                         'delivery_date': delivery_date,
                         'delivery_time': delivery_time
                     }
-                    print(f"✅ Найдена доставка: {order_number} -> {delivery_date} {delivery_time}")
                     
-            except Exception as e:
-                print(f"❌ Ошибка парсинга строки: {e}")
+            except Exception:
                 continue
     
     return delivery_data
