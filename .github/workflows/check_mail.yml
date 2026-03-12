@@ -2,7 +2,7 @@ name: Check Mail Orders
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/0 * * * *'исправить после "/" проставить минуты от 5 и более
   workflow_dispatch:
 
 jobs:
